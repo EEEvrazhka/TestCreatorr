@@ -1,24 +1,32 @@
 import sys
+import os
 import sqlite3
-from PyQt5 import uic
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QPushButton, QLabel, QFileDialog, QTextEdit, QCheckBox,
-                             QVBoxLayout, QScrollArea, QFrame)
-from PyQt5.QtGui import QPixmap, QIcon
+
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QPushButton, QLabel, QFileDialog, QVBoxLayout, QScrollArea)
+from PyQt5.QtGui import QPixmap
 from functools import partial
 
+from TestCreator import Ui_MainWindow
+from Editor import Ui_Form as UI_Editor
+from TestPassing import Ui_Form as UI_pass
 
-class TestPass(QWidget):
+
+class TestPass(QWidget, UI_pass):
     def __init__(self, test_ID):
         super().__init__()
-        uic.loadUi('./static/ui/TestPassing.ui', self)
+        # uic.loadUi('./static/ui/TestPassing.ui', self)
+        # self.ui = Ui_Form()
+        self.setupUi(self)
         self.test_id = test_ID
         print(self.test_id)
 
 
-class Editor(QWidget):
+class Editor(QWidget, UI_Editor):
     def __init__(self, test_ID):
         super().__init__()
-        uic.loadUi('./static/ui/Editor.ui', self)
+        # uic.loadUi('./static/ui/Editor.ui', self)
+        # self.ui = Ui_Form()
+        self.setupUi(self)
         self.current_question = 1
         self.current_image_filename = ''
         self.test_id = test_ID
@@ -78,8 +86,10 @@ class Editor(QWidget):
                                                    options=options)
         try:
             if file_name:
-                self.current_image_filename = file_name
+
                 pixmap = QPixmap(file_name)
+
+                self.save_image(file_name)
 
                 label_image = QLabel(self)
                 label_image.setPixmap(pixmap.scaled(281, 261))
@@ -89,6 +99,20 @@ class Editor(QWidget):
                 self.pushButton_img.hide()
         except Exception as e:
             print(f"Ошибка: {e}")
+
+    def save_image(self, file_name):
+        static_folder = "static\img"
+        if not os.path.exists(static_folder):
+            os.makedirs(static_folder)
+
+        base_name = os.path.basename(file_name)
+        new_file_path = os.path.join(static_folder, base_name)
+        pixmap = QPixmap(file_name)
+        self.current_image_filename = new_file_path
+        if pixmap.save(new_file_path):
+            print(f"Изображение сохранено в {new_file_path}")
+        else:
+            print("Ошибка при сохранении изображения")
 
     def change_visibility(self, num):
         if self.widgets[num][0].isEnabled():
@@ -100,11 +124,13 @@ class Editor(QWidget):
             widget.setEnabled(not widget.isEnabled())
 
 
-class Example(QMainWindow):
+class Example(QMainWindow, Ui_MainWindow):
     def __init__(self):
         try:
             super().__init__()
-            uic.loadUi('./static/ui/TestCreator.ui', self)
+            # uic.loadUi('./static/ui/TestCreator.ui', self)
+            # self.ui = Ui_MainWindow()
+            self.setupUi(self)
             self.pushButton.clicked.connect(self.add_test)
 
             self.test_buttons = []
