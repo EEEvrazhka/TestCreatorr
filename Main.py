@@ -1,17 +1,28 @@
 import sys
 import sqlite3
 from PyQt5 import uic
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QLabel, QFileDialog, QTextEdit, QCheckBox, QVBoxLayout, QScrollArea, QFrame
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QPushButton, QLabel, QFileDialog, QTextEdit, QCheckBox,
+                             QVBoxLayout, QScrollArea, QFrame)
 from PyQt5.QtGui import QPixmap, QIcon
+from functools import partial
+
+
+class TestPass(QWidget):
+    def __init__(self, test_ID):
+        super().__init__()
+        uic.loadUi('./static/ui/TestPassing.ui', self)
+        self.test_id = test_ID
+        print(self.test_id)
 
 
 class Editor(QWidget):
-    def __init__(self):
+    def __init__(self, test_ID):
         super().__init__()
         uic.loadUi('./static/ui/Editor.ui', self)
         self.current_question = 1
         self.current_image_filename = ''
-        self.test_id = 1
+        self.test_id = test_ID
+        print(self.test_id)
 
         self.widgets = [[self.label_1, self.textEdit_1, self.checkBox_1],
                         [self.label_2, self.textEdit_2, self.checkBox_2],
@@ -45,11 +56,12 @@ class Editor(QWidget):
             for widget in self.widgets:
                 if widget[1].isEnabled():
                     if widget[2].isChecked():
-                        cursor.execute('INSERT INTO Answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)',
-                                       (self.current_question, widget[1].toPlainText(), 1))
+                        cursor.execute('INSERT INTO Answers (test_id, question_id, answer_text, is_correct) VALUES (?, ?, ?, ?)',
+                                       (self.test_id, self.current_question, widget[1].toPlainText(), 1))
                     else:
-                        cursor.execute('INSERT INTO Answers (question_id, answer_text, is_correct) VALUES (?, ?, ?)',
-                                       (self.current_question, widget[1].toPlainText(), 0))
+                        cursor.execute(
+                            'INSERT INTO Answers (test_id, question_id, answer_text, is_correct) VALUES (?, ?, ?, ?)',
+                            (self.test_id, self.current_question, widget[1].toPlainText(), 0))
 
             connection.commit()
             connection.close()
@@ -95,44 +107,82 @@ class Example(QMainWindow):
             uic.loadUi('./static/ui/TestCreator.ui', self)
             self.pushButton.clicked.connect(self.add_test)
 
-            self.test_buttons = [self.pushButton_3, self.pushButton_4, self.pushButton_5]
+            self.test_buttons = []
             self.current_test_index = 0
+            self.test_id = 0
+
+            self.scrollArea = QScrollArea(self.centralwidget)
+            self.scrollArea.setGeometry(20, 80, 280, 400)
+            self.scrollArea.setWidgetResizable(True)
+
+            self.scrollContent = QWidget()
+            self.scrollLayout = QVBoxLayout(self.scrollContent)
+
+            self.scrollContent.setLayout(self.scrollLayout)
+            self.scrollArea.setWidget(self.scrollContent)
+
+            self.scrollLayout.setContentsMargins(0, 0, 0, 380)
+            self.scrollLayout.setSpacing(0)
 
         except Exception as e:
-            print(e)
+            print("Ошибка при инициализации виджетов" + e)
 
-        connection = sqlite3.connect('db/my_database.db')
+        try:
+            connection = sqlite3.connect('db/my_database.db')
+            cursor = connection.cursor()
+
+            cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS Tests (
+                            id INTEGER PRIMARY KEY  ,
+                            title TEXT NOT NULL
+                            )
+                            ''')
+
+            cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS Questions (
+                            id INTEGER PRIMARY KEY  ,
+                            test_id INTEGER NOT NULL,
+                            question_text TEXT NOT NULL,
+                            image_path TEXT NOT NULL
+                            )
+                            ''')
+
+            cursor.execute('''
+                            CREATE TABLE IF NOT EXISTS Answers (
+                            id INTEGER PRIMARY KEY  ,
+                            test_id INTEGER NOT NULL,
+                            question_id INTEGER NOT NULL,
+                            answer_text TEXT NOT NULL,
+                            is_correct INTEGER NOT NULL
+                            )
+                            ''')
+            cursor.execute('SELECT * FROM Tests')
+            results = cursor.fetchall()
+            #print(*results)
+            for i in results:
+                print(i[1])
+                button = QPushButton(i[1], self.scrollContent)
+                button.clicked.connect(partial(self.open_test_window, i[1]))
+                self.test_buttons.append(button)
+                self.scrollLayout.addWidget(button)
+
+            connection.close()
+        except Exception as e:
+            print("Ошибка при создании таблиц: " + e)
+
+    def open_test_window(self, name):
+        connection = sqlite3.connect('./db/my_database.db')
         cursor = connection.cursor()
 
-        cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS Tests (
-                        id INTEGER PRIMARY KEY  ,
-                        title TEXT NOT NULL
-                        )
-                        ''')
-
-        cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS Questions (
-                        id INTEGER PRIMARY KEY  ,
-                        test_id INTEGER NOT NULL,
-                        question_text TEXT NOT NULL,
-                        image_path TEXT NOT NULL
-                        )
-                        ''')
-
-        cursor.execute('''
-                        CREATE TABLE IF NOT EXISTS Answers (
-                        id INTEGER PRIMARY KEY  ,
-                        question_id INTEGER NOT NULL,
-                        answer_text TEXT NOT NULL,
-                        is_correct INTEGER NOT NULL
-                        )
-                        ''')
         cursor.execute('SELECT * FROM Tests')
         results = cursor.fetchall()
-        print(*results)
         for i in results:
-            print(i)
+            if i[1] == name:
+                self.test_pass= TestPass(int(i[0]))
+                self.test_pass.show()
+
+        print(f"Тест: {name}")
+
         connection.close()
 
     def add_test(self):
@@ -148,13 +198,18 @@ class Example(QMainWindow):
                     self.lineEdit.setText("Test exists")
                     return
 
-            if test_name and self.current_test_index < len(self.test_buttons):
-                self.test_buttons[self.current_test_index].setText(test_name)
-                self.current_test_index += 1
+            if test_name:
+                button = QPushButton(test_name, self.scrollContent)
+                button.clicked.connect(partial(self.open_test_window, test_name))
+                self.test_buttons.append(button)
+                self.scrollLayout.addWidget(button)
                 self.lineEdit.clear()
+                cursor.execute('INSERT INTO Tests (title) VALUES (?)',
+                               (test_name,))
+            cursor.execute('SELECT * FROM Tests')
+            results = cursor.fetchall()
+            self.test_id = int(results[len(results)-1][0])
 
-            cursor.execute('INSERT INTO Tests (title) VALUES (?)',
-                           (test_name,))
             connection.commit()
             connection.close()
 
@@ -164,13 +219,10 @@ class Example(QMainWindow):
 
     def open_second_window(self):
         try:
-            self.second_window = Editor()
+            self.second_window = Editor(self.test_id)
             self.second_window.show()
         except Exception as e:
             print(f"Ошибка: {e}")
-
-    def open_test(self):
-        pass
 
 
 if __name__ == '__main__':
