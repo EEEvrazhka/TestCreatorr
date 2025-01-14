@@ -84,7 +84,7 @@ class TestPass(QWidget, UI_pass):
 
         if set(selected_answers) == set(correct_answers):
             self.correct_answers_count += 1
-            print("Правильный ответ!")
+            print("Правильный ответ")
         else:
             print("Неправильный ответ.")
 
